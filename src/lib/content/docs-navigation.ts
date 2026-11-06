@@ -25,17 +25,22 @@ const deployedMarkdown = import.meta.glob<string>('../../../docs/deployed-behavi
 	import: 'default'
 });
 
-function searchableText(markdown: string): string {
-	return markdown
-		.replace(/<!--[\s\S]*?-->/g, ' ')
-		.replace(/```[\s\S]*?```/g, ' ')
-		.replace(/`([^`]+)`/g, '$1')
-		.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-		.replace(/https?:\/\/\S+/g, ' ')
+export function normalizeDocsSearchText(value: string): string {
+	return value
 		.normalize('NFKD')
 		.replace(/[\u0300-\u036f]/g, '')
 		.replace(/[^a-z0-9]+/gi, ' ')
 		.toLocaleLowerCase();
+}
+
+function searchableText(markdown: string): string {
+	const plainText = markdown
+		.replace(/<!--[\s\S]*?-->/g, ' ')
+		.replace(/```[\s\S]*?```/g, ' ')
+		.replace(/`([^`]+)`/g, '$1')
+		.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+		.replace(/https?:\/\/\S+/g, ' ');
+	return normalizeDocsSearchText(plainText);
 }
 
 function reference(slug: string): DocsNavigationLink | undefined {

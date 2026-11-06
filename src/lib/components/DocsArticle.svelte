@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { tick, type Component } from 'svelte';
 
 	type Props = {
@@ -57,6 +58,11 @@
 </svelte:head>
 
 <div class="article-page">
+	<nav class="breadcrumbs" aria-label="Breadcrumb">
+		<a href={resolve('/docs/')}>Documentation</a>
+		<span aria-hidden="true">/</span>
+		<span aria-current="page">{title}</span>
+	</nav>
 	<header class="article-header">
 		<p class="eyebrow">{eyebrow}</p>
 		<h1>{title}</h1>
@@ -91,6 +97,10 @@
 
 <style>
 	.article-page { width: min(100%, 980px); padding: 7px 0 28px; }
+	.breadcrumbs { display: flex; align-items: center; gap: 8px; margin-bottom: 21px; color: var(--dim); font-size: .63rem; }
+	.breadcrumbs a { color: var(--muted); text-decoration: none; }
+	.breadcrumbs a:hover { color: var(--mint); }
+	.breadcrumbs span[aria-current="page"] { color: var(--text); }
 	.article-header { margin-bottom: 24px; }
 	.article-header h1 { margin: 9px 0 11px; color: var(--text); font-size: clamp(2.2rem, 5vw, 3.6rem); letter-spacing: -.075em; line-height: 1.04; }
 	.article-summary { max-width: 780px; margin: 0; color: var(--muted); font-size: .94rem; line-height: 1.7; }

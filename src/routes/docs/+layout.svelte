@@ -2,19 +2,19 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import type { LayoutProps } from './$types';
-	import { docsNavigationSections } from '#lib/content/docs-navigation.js';
+	import { docsNavigationSections, normalizeDocsSearchText } from '#lib/content/docs-navigation.js';
 
 	let { children }: LayoutProps = $props();
 	let query = $state('');
 	let menuOpen = $state(false);
 	const sections = docsNavigationSections();
 	const filteredSections = $derived.by(() => {
-		const term = query.trim().toLocaleLowerCase();
+		const term = normalizeDocsSearchText(query.trim());
 		if (!term) return sections;
 		return sections
 			.map((section) => ({
 				...section,
-				links: section.links.filter((link) => `${link.title} ${link.summary} ${link.searchText}`.toLocaleLowerCase().includes(term))
+				links: section.links.filter((link) => normalizeDocsSearchText(`${link.title} ${link.summary} ${link.searchText}`).includes(term))
 			}))
 			.filter((section) => section.links.length > 0);
 	});
@@ -23,7 +23,7 @@
 </script>
 
 <div class="docs-layout container">
-	<aside class="docs-sidebar" class:open={menuOpen} aria-label="Documentation navigation">
+	<aside id="docs-sidebar" class="docs-sidebar" class:open={menuOpen} aria-label="Documentation navigation">
 		<a class="sidebar-title" href={resolve('/docs/')} onclick={() => (menuOpen = false)}>
 			<span class="sidebar-mark" aria-hidden="true">▣</span>
 			<span><strong>Documentation</strong><small>Current protocol guide</small></span>
@@ -58,7 +58,7 @@
 	</aside>
 
 	<main class="docs-main">
-		<button class="mobile-nav-toggle" type="button" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
+		<button class="mobile-nav-toggle" type="button" aria-controls="docs-sidebar" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
 			<span aria-hidden="true">☰</span> Browse documentation
 			<span class="toggle-arrow" aria-hidden="true">{menuOpen ? '−' : '+'}</span>
 		</button>
