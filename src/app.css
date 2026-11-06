@@ -1,0 +1,92 @@
+:root {
+	font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	color: #f2f4f2;
+	background: #0b0d0c;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	--page: #0b0d0c;
+	--surface: #121614;
+	--surface-raised: #171c19;
+	--mint: #40ffb6;
+	--text: #f2f4f2;
+	--muted: #a7adaa;
+	--dim: #777f7b;
+	--border: #2a302e;
+	--warning: #f4c96a;
+	--danger: #ff817b;
+	--content: 1480px;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; scroll-behavior: smooth; }
+
+body {
+	min-width: 320px;
+	min-height: 100vh;
+	margin: 0;
+	background: var(--page);
+	color: var(--text);
+}
+
+body, button, input, select, textarea { font-family: inherit; }
+
+a { color: inherit; text-decoration-color: color-mix(in srgb, var(--mint) 55%, transparent); text-underline-offset: 0.2em; }
+a:hover { color: var(--mint); }
+
+button, input, select { font: inherit; }
+button { color: inherit; }
+
+::selection { color: var(--page); background: var(--mint); }
+
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+
+.mono, code, pre, .eyebrow { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.eyebrow {
+	margin: 0;
+	color: var(--mint);
+	font-size: 0.73rem;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	line-height: 1.4;
+	text-transform: uppercase;
+}
+
+.muted { color: var(--muted); }
+.dim { color: var(--dim); }
+
+.button {
+	display: inline-flex;
+	min-height: 46px;
+	align-items: center;
+	justify-content: center;
+	gap: 0.65rem;
+	border: 1px solid var(--mint);
+	border-radius: 5px;
+	padding: 0.7rem 1.05rem;
+	background: var(--mint);
+	color: #06120d;
+	font-size: 0.9rem;
+	font-weight: 800;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.button:hover { border-color: #8dffd2; background: #8dffd2; color: #06120d; }
+.button.secondary { border-color: var(--border); background: var(--surface); color: var(--text); }
+.button.secondary:hover { border-color: var(--mint); color: var(--mint); }
+.button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.panel {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
+.container { width: min(var(--content), calc(100% - 48px)); margin-inline: auto; }
+
+@media (max-width: 640px) {
+	.container { width: min(var(--content), calc(100% - 32px)); }
+}

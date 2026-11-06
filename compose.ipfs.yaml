@@ -1,0 +1,26 @@
+name: catinabox-ipfs
+
+services:
+  kubo:
+    image: ipfs/kubo:v0.43.1
+    container_name: catinabox-kubo
+    restart: unless-stopped
+    environment:
+      IPFS_PROFILE: server
+    ports:
+      - "4001:4001/tcp"
+      - "4001:4001/udp"
+      - "127.0.0.1:5001:5001"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - kubo-data:/data/ipfs
+      - ./build:/export:ro
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  kubo-data:

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0c">
+  <title>Page not found — Cat in a Box</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.6 ui-sans-serif,system-ui,sans-serif;color:#f2f4f2;background:#0b0d0c}*{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px}.card{max-width:560px;border:1px solid #2a302e;border-radius:8px;background:#121614;padding:32px}p{color:#a7adaa}.code{font:500 .72rem ui-monospace,monospace;letter-spacing:.12em;color:#40ffb6;text-transform:uppercase}a{display:inline-block;margin:14px 10px 0 0;border:1px solid #40ffb6;border-radius:4px;padding:10px 14px;color:#06120d;background:#40ffb6;font-weight:700;text-decoration:none}a.secondary{border-color:#2a302e;color:#f2f4f2;background:#171c19}
+  </style>
+</head>
+<body data-base-path="">
+  <main class="card">
+    <p class="code">404 · Route not found</p>
+    <h1>This page isn’t here.</h1>
+    <p>The page may have moved, or the link may be incomplete. Use the home page or open the docs and app from there.</p>
+    <a id="home" href="./">Home</a>
+    <a id="docs" class="secondary" href="./docs/">Docs</a>
+    <a id="app" class="secondary" href="./app/">Open app</a>
+  </main>
+  <script>
+    (() => {
+      const configuredBase = document.body.dataset.basePath || '';
+      const segments = location.pathname.split('/').filter(Boolean);
+      const known = segments.findIndex((segment) => segment === 'docs' || segment === 'app');
+      const gateway = segments[0] === 'ipfs' || segments[0] === 'ipns' ? `/${segments.slice(0, 2).join('/')}` : '';
+      const inferred = known >= 0 ? `/${segments.slice(0, known).join('/')}` : gateway;
+      const prefix = configuredBase || inferred;
+      const target = (path) => `${prefix ? `${prefix.replace(/\/$/, '')}/` : '/'}${path}`;
+      document.querySelector('#home').href = target('');
+      document.querySelector('#docs').href = target('docs/');
+      document.querySelector('#app').href = target('app/');
+    })();
+  </script>
+</body>
+</html>

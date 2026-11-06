@@ -1,0 +1,12 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+coverage/
+.superpowers/
+docs/superpowers/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.tsbuildinfo

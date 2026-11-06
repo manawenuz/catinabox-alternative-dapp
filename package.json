@@ -1,0 +1,32 @@
+{
+  "name": "catinabox-alternative-dapp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && node scripts/patch-404.mjs",
+    "test": "node --test",
+    "preview": "vite preview",
+    "reference:build": "node scripts/build-reference-catalog.mjs"
+  },
+  "imports": {
+    "#lib": "./src/lib/index.js",
+    "#lib/*": "./src/lib/*"
+  },
+  "engines": {
+    "node": ">=22.17"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "4.0.1",
+    "@sveltejs/kit": "3.1.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "mdsvex": "0.12.8",
+    "svelte": "5.57.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.6"
+  },
+  "dependencies": {
+    "viem": "^2.57.16"
+  }
+}
