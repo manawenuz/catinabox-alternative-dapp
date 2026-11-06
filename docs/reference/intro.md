@@ -8,7 +8,7 @@ The contracts use stETH as collateral and issue boxETH as debt. A position's bor
 
 The CDP contracts account for stETH held above the system's tracked deposits as excess yield. They distribute eligible excess through point accounting, with different weights and fee formulas in v1 and v1.1. The position is settled when selected CDP actions run; the displayed accrued amount is not a fixed-rate APR or a promise of future yield.
 
-If a position's auto-repay flag is enabled, settled yield can reduce its debt when the amount fits within that debt. Otherwise, yield is added to the position's deposited balance. See [v1 and v1.1](../v1-1/) for the version-specific formulas and [deployed behavior](../deployed-behavior/) for the dated chain snapshot.
+If a position's auto-repay flag is enabled, settled yield can reduce its debt when the amount fits within that debt. Otherwise, yield is added to the position's deposited balance. See [v1 and v1.1](../v1-1/) for the version-specific formulas and [deployed behavior](../../deployed-behavior/) for the dated chain snapshot.
 
 ## Ways to use a position
 

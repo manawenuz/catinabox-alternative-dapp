@@ -75,13 +75,15 @@ The printed public gateway URL is a retrieval route, not a remote pin. This pin 
 
 ## Documentation
 
-`docs/reference/` contains independently written summaries and links to the published source pages. The upstream wording, figures, and media are left on the project documentation site. `docs/deployed-behavior.md` separately documents observed contract behavior, with a dated chain snapshot and links to verified code.
+`/docs/` is a searchable, sidebar-based wiki with full current-behavior guides for using the app, the v1 and v1.1 CDPs, approvals, boxFEE, staking, resolution, contract addresses, and valuation records. Articles are based on the current app and deployed-behavior analysis; links to the original site are retained as historical background. `docs/deployed-behavior.md` contains the contract formulas and block-stamped Ethereum snapshots.
 
-Refresh the source-link manifest and summary files with:
+Refresh article titles, summaries, and source-link metadata in the manifest with:
 
 ```sh
 npm run reference:build
 ```
+
+The catalog command does not overwrite article Markdown. Publishing through `./scripts/publish-ipfs.sh` builds and pins a new root CID on the local Kubo node. IPFS CIDs are immutable, so every updated build has a new gateway URL; the old CID continues to serve its previous content.
 
 ## Redemption history search
 

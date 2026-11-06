@@ -1,6 +1,4 @@
-# Deployed behavior: funds, fees, staking, and redemption
-
-This guide compares the public documentation with the source and state observed on Ethereum mainnet. It is a dated reference, not a promise that mutable settings or market conditions will remain the same. The local [documentation catalog](../) links each published source page.
+This guide records contract behavior and dated Ethereum mainnet snapshots. Mutable settings, balances, and market conditions can change; the app reads supported values live. The [wiki home](../) links the current user and protocol guides.
 
 ## Where the protocol assets sit
 

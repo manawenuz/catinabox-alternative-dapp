@@ -17,4 +17,4 @@ These are the addresses configured by the current interface. The two CDPs are in
 
 The selected CDP handles stETH collateral, boxETH debt, version-specific yield settlement, and direct `stabilisePeg` redemption. boxETH is the debt token. boxFEE is backed by boxETH in a vault; the fee-staking contract accepts boxFEE and pays rewards in boxETH. The PSM receives the friction fee configured by the selected CDP; v1.1 exposes a mutable PSM setting, so the app reads the current recipient.
 
-The app is configured for chain ID 1 and reads live balances and settings from a public Ethereum RPC. A source-verified address is not an audit or a guarantee of contract safety. Review [approvals](../approvals/) and the [current contract behavior guide](../deployed-behavior/) before interacting.
+The app is configured for chain ID 1 and reads live balances and settings from a public Ethereum RPC. A source-verified address is not an audit or a guarantee of contract safety. Review [approvals](../approvals/) and the [current contract behavior guide](../../deployed-behavior/) before interacting.

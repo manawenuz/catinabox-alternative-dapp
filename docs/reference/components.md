@@ -24,7 +24,7 @@ The PSM address is not a promise of a general-purpose swap pool. Verify the reci
 
 The boxFEE contract holds boxETH as its vault asset and issues boxFEE shares. `totalAssets()` and `convertToAssets()` expose the current contract accounting; this ratio is not a market quote. Some entrypoints behave differently from the usual ERC-4626 preview convention, as detailed in the [boxFEE guide](../tokenomics/).
 
-The fee-staking contract accepts boxFEE as stake collateral. Its configured reward token is boxETH, distributed through points accounting. The user claim operation is `poke(account)`. Its `trade` method is restricted to the converter role and is not a user-facing swap.
+The fee-staking contract accepts boxFEE as stake collateral. Its configured reward token is boxETH, distributed through points accounting. The user claim operation is `poke(account)`. Its `trade` method is restricted to the converter role; it converts against the contract's configured stETH `tradeable` reserve and is not a user-facing swap.
 
 ### External market routes
 

@@ -1,107 +1,107 @@
 [
   {
     "slug": "intro",
-    "title": "Introduction",
+    "title": "Protocol overview",
     "sourceUrl": "https://docs.catinabox.finance/docs/intro/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "This page introduces the protocol’s original stETH-backed borrowing model, the role of boxETH, yield-linked position incentives, and the limited administrative controls described at publication.",
+    "summary": "Current overview of the stETH-backed CDP system, boxETH debt, version-specific yield accounting, direct resolution, and the difference between contract values and market prices.",
     "file": "docs/reference/intro.md"
   },
   {
     "slug": "use-cases",
-    "title": "Use Cases",
+    "title": "Ways to use the protocol",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/use-cases/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The article surveys ways the project expected users to supply collateral, borrow boxETH, participate in liquidity or fee-token activity, and resolve debt positions.",
+    "summary": "Current paths for borrowing against stETH, repaying and withdrawing, using boxFEE and fee staking, and reviewing permissionless CDP resolution.",
     "file": "docs/reference/use-cases.md"
   },
   {
     "slug": "user-guide",
-    "title": "User Guide",
+    "title": "Borrower guide",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/user-guide/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "This guide walks through the project’s documented user workflows for collateral deposits, borrowing and repayment, managing position health, third-party resolution, and fee-token participation.",
+    "summary": "Step-by-step guide to connecting on Ethereum mainnet, choosing a CDP, depositing, borrowing, repaying, withdrawing, checking allowances, and using boxFEE and redemption.",
     "file": "docs/reference/user-guide.md"
   },
   {
     "slug": "components",
-    "title": "Components",
+    "title": "Protocol components",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/components/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The page describes the protocol’s main components, including borrower positions, the peg-stability module, resolution activity, and fee-token staking, with diagrams on the original site.",
+    "summary": "How the v1 and v1.1 CDPs, stETH, boxETH, the PSM, the boxFEE vault, fee staking, and external Uniswap routes fit together.",
     "file": "docs/reference/components.md"
   },
   {
     "slug": "asset-valuations",
-    "title": "Asset Valuations",
+    "title": "Asset valuation",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/asset-valuations/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "This short article discusses how a user might reason about the value of boxETH in particular transaction histories. It is project documentation, not tax advice or a live market quote.",
+    "summary": "Distinguish historical boxETH market prices, direct CDP redemption amounts, and boxFEE vault conversions when keeping transaction records.",
     "file": "docs/reference/asset-valuations.md"
   },
   {
     "slug": "contracts",
-    "title": "Contracts",
+    "title": "Contracts and addresses",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/contracts/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The published page lists protocol contract addresses and identifies their broad roles. Confirm an address and its current code before interacting with it.",
+    "summary": "Ethereum mainnet addresses configured by the app for the CDPs, tokens, PSM, fee-staking contract, and treasury multisig.",
     "file": "docs/reference/contracts.md"
   },
   {
     "slug": "approvals",
-    "title": "Approvals",
+    "title": "Token approvals",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/approvals/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "This page outlines token allowances the original interface expects for selected protocol operations, including collateral, debt repayment, and fee-token staking.",
+    "summary": "Tokens and spenders used for deposits, repayments, redemptions, boxFEE vault actions, and staking, including residual boxETH allowance behavior.",
     "file": "docs/reference/approvals.md"
   },
   {
     "slug": "admin-controls",
-    "title": "Admin Controls",
+    "title": "Admin controls",
     "sourceUrl": "https://docs.catinabox.finance/docs/documents/admin-controls/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The article describes the project’s published view of administrative controls and its then-current plans for managing protocol fees and automated market operations.",
+    "summary": "Current fee setters, mutable PSM recipient, dated mainnet settings, and the difference between admin parameters and the per-position repayment flag.",
     "file": "docs/reference/admin-controls.md"
   },
   {
     "slug": "resolve",
-    "title": "Resolve",
+    "title": "Direct resolution",
     "sourceUrl": "https://docs.catinabox.finance/docs/guides/resolve/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "This guide presents a resolver workflow based on tracking borrower activity, inspecting a position’s terms, comparing a market purchase with the resolution cost, and submitting a resolution transaction. Verify view names, fee tokens, and limits against deployed contracts.",
+    "summary": "How `stabilisePeg` applies boxETH to a target position, calculates friction, caps each call at one quarter of debt, and how the read-only scanner ranks candidates.",
     "file": "docs/reference/resolve.md"
   },
   {
     "slug": "tokenomics",
-    "title": "boxFEE Tokenomics",
+    "title": "boxFEE and staking",
     "sourceUrl": "https://docs.catinabox.finance/docs/tokenomics/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The page discusses the original boxFEE distribution narrative, staking, backing, liquidity plans, and possible holder exit paths. Treat market and backing statements as historical project claims.",
+    "summary": "Current boxETH-backed vault accounting, boxFEE share conversion, non-standard entrypoint behavior, and boxETH rewards from fee staking.",
     "file": "docs/reference/tokenomics.md"
   },
   {
     "slug": "v1-1",
-    "title": "Version 1.1",
+    "title": "V1 and v1.1",
     "sourceUrl": "https://docs.catinabox.finance/docs/v1.1/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "This release note compares documented v1 and v1.1 behavior, including the project’s descriptions of position incentives, borrowing fees, and fee-token routing.",
+    "summary": "Compare the two live CDP deployments, including yield distribution weights, fee formulas, mint fees, LTV getters, and independent position state.",
     "file": "docs/reference/v1-1.md"
   },
   {
     "slug": "explainer",
-    "title": "Explainer Video",
+    "title": "Explainer video (archive)",
     "sourceUrl": "https://docs.catinabox.finance/docs/videos/explainer/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The original page contains an embedded project explainer video.",
+    "summary": "Archived early project explainer. Use the current protocol and contract guides for present-day behavior.",
     "file": "docs/reference/videos/explainer.md",
     "mediaUrl": "https://www.youtube.com/watch?v=dbAxSl0yYc8"
   },
   {
     "slug": "teaser",
-    "title": "Teaser Video",
+    "title": "Teaser video (archive)",
     "sourceUrl": "https://docs.catinabox.finance/docs/videos/teaser/",
     "checkedAt": "2026-11-06T10:59:36.676Z",
-    "summary": "The original page contains an embedded project teaser video.",
+    "summary": "Archived project teaser retained for historical context, not as a current feature or contract guide.",
     "file": "docs/reference/videos/teaser.md",
     "mediaUrl": "https://www.youtube.com/watch?v=WEAE3XyF2x4"
   }

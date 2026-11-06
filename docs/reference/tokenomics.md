@@ -2,7 +2,7 @@
 
 The deployed boxFEE contract holds boxETH as its asset. `totalAssets()` reads the vault's boxETH balance, and `convertToAssets(shares)` provides a contract conversion based on current assets and share supply. This is an on-chain accounting ratio, not a DEX price, a guaranteed exit value, or a measure of immediately available market liquidity.
 
-At block **26,354,277** (2026-11-06 07:20:47 UTC), one boxFEE converted to approximately **0.106273 boxETH**. This is a historical snapshot only. Use the live contract value for a current estimate and the transaction receipt for an executed deposit, withdrawal, mint, or redemption.
+At block **26,355,994** (2026-11-06 13:04:35 UTC), one boxFEE converted to approximately **0.1062729535 boxETH**. This is a historical snapshot only. Use the live contract value for a current estimate and the transaction receipt for an executed deposit, withdrawal, mint, or redemption.
 
 ## Entry and exit calls
 
@@ -18,4 +18,4 @@ Staking rewards are separate from stETH yield accounted by a CDP. Neither system
 
 ## What this page does not claim
 
-Historical sale plans, liquidity roadmaps, and projected backing in the original documentation are not current contract guarantees. Verify the deployed vault balance, share supply, reward token, and market liquidity at the time of use. See the [contract directory](../contracts/) and [deployed behavior guide](../deployed-behavior/).
+Historical sale plans, liquidity roadmaps, and projected backing in the original documentation are not current contract guarantees. Verify the deployed vault balance, share supply, reward token, and market liquidity at the time of use. See the [contract directory](../contracts/) and [deployed behavior guide](../../deployed-behavior/).
