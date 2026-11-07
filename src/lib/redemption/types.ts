@@ -57,7 +57,7 @@ export type CachedScan = {
 };
 
 export type ScanWorkerRequest =
-	| { type: 'start'; version: CdpVersion; address: Address; rpcUrl: string; fromBlock: string; throughBlock: string; initialChunk?: number }
+	| { type: 'start'; version: CdpVersion; address: Address; rpcUrl: string; etherscanApiKey?: string; fromBlock: string; throughBlock: string; initialChunk?: number }
 	| { type: 'pause' }
 	| { type: 'resume' }
 	| { type: 'cancel' };

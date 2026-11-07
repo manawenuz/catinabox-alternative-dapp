@@ -1,5 +1,5 @@
 import type { Address } from 'viem';
-import { ADDRESSES, MAINNET_RPC_URL, cdpAddress, DEPLOYMENT_BLOCKS, type CdpVersion } from '#lib/chain/config.js';
+import { ADDRESSES, ETHERSCAN_API_KEY, MAINNET_RPC_URL, cdpAddress, DEPLOYMENT_BLOCKS, type CdpVersion } from '#lib/chain/config.js';
 import { erc20Abi } from '#lib/chain/abis.js';
 import { publicClient } from '#lib/chain/clients.js';
 import { readPosition, readSystemState } from '#lib/chain/reads.js';
@@ -70,6 +70,7 @@ export function createRedemptionScanner(): RedemptionScanner {
 			worker.onerror = (event) => finish(new Error(event.message || 'The scan worker stopped unexpectedly.'));
 			worker.postMessage({
 				type: 'start', version, address: cdpAddress(version), rpcUrl: MAINNET_RPC_URL,
+				etherscanApiKey: ETHERSCAN_API_KEY,
 				fromBlock: fromBlock.toString(), throughBlock: throughBlock.toString(), initialChunk: 2_000
 			});
 			if (stopped) worker.postMessage({ type: 'cancel' });

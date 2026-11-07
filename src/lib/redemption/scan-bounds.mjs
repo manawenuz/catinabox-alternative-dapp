@@ -19,17 +19,18 @@ export function scanBudgetExceeded(requests, startedAt, now = performance.now())
  * @param {Response} response
  * @param {AbortSignal} signal
  * @param {number} [maxBytes]
+ * @param {string} [provider]
  * @returns {Promise<unknown>}
  */
-export async function readRpcResponseJson(response, signal, maxBytes = MAX_RPC_RESPONSE_BYTES) {
+export async function readRpcResponseJson(response, signal, maxBytes = MAX_RPC_RESPONSE_BYTES, provider = 'RPC') {
 	const body = response.body;
-	if (!body) throw new Error('RPC returned an empty response body.');
+	if (!body) throw new Error(`${provider} returned an empty response body.`);
 
 	const contentLength = response.headers.get('content-length');
 	const declaredSize = contentLength && /^\d+$/.test(contentLength) ? Number(contentLength) : undefined;
 	if (declaredSize !== undefined && declaredSize > maxBytes) {
 		void body.cancel().catch(() => {});
-		throw responseLimitError(maxBytes);
+		throw responseLimitError(maxBytes, provider);
 	}
 
 	const reader = body.getReader();
@@ -40,12 +41,12 @@ export async function readRpcResponseJson(response, signal, maxBytes = MAX_RPC_R
 
 	try {
 		while (true) {
-			throwIfAborted(signal);
+			throwIfAborted(signal, provider);
 			const { done, value } = await reader.read();
-			throwIfAborted(signal);
+			throwIfAborted(signal, provider);
 			if (done) break;
 			const nextBytesRead = bytesRead + value.byteLength;
-			if (nextBytesRead > maxBytes) throw responseLimitError(maxBytes);
+			if (nextBytesRead > maxBytes) throw responseLimitError(maxBytes, provider);
 			if (nextBytesRead > bytes.byteLength) {
 				let capacity = Math.max(1, bytes.byteLength);
 				while (capacity < nextBytesRead) capacity = Math.min(maxBytes, capacity * 2);
@@ -91,14 +92,15 @@ export function scanAddressLimitError() {
 
 /**
  * @param {AbortSignal} signal
+ * @param {string} provider
  * @returns {void}
  */
-function throwIfAborted(signal) {
+function throwIfAborted(signal, provider) {
 	if (!signal.aborted) return;
-	throw signal.reason instanceof Error ? signal.reason : new Error('The RPC response read was aborted.');
+	throw signal.reason instanceof Error ? signal.reason : new Error(`The ${provider} response read was aborted.`);
 }
 
-/** @param {number} maxBytes @returns {Error} */
-function responseLimitError(maxBytes) {
-	return new Error(`RPC response exceeded the ${maxBytes}-byte safety limit.`);
+/** @param {number} maxBytes @param {string} provider @returns {Error} */
+function responseLimitError(maxBytes, provider) {
+	return new Error(`${provider} response exceeded the ${maxBytes}-byte safety limit.`);
 }

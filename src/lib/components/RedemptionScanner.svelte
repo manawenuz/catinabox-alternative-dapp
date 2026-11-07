@@ -7,7 +7,7 @@
 	import { rankCandidates } from '#lib/redemption/ranking.js';
 	import type { Candidate, RedemptionEstimate, ScanProgress } from '#lib/redemption/types.js';
 	import type { CandidateDiscovery } from '#lib/redemption/scanner.js';
-	import type { CdpVersion } from '#lib/chain/config.js';
+	import { ETHERSCAN_API_KEY, type CdpVersion } from '#lib/chain/config.js';
 
 	type Props = { onSelect: (candidate: Candidate, amount: bigint) => void };
 	let { onSelect }: Props = $props();
@@ -23,6 +23,7 @@
 	let stopping = $state(false);
 	let operationController: AbortController | undefined;
 	let runNumber = 0;
+	const usesEtherscan = Boolean(ETHERSCAN_API_KEY);
 	const allSelectedComplete = $derived(versions.length > 0 && versions.every((version) => progress[version]?.status === 'complete'));
 	onDestroy(() => { operationController?.abort(); scanner.cancel(); });
 
@@ -103,7 +104,8 @@
 
 <section class="scanner panel">
 	<div class="header"><div><p class="eyebrow">Browser based discovery</p><h2>Find live redemption targets</h2></div><span class="privacy mono">READ ONLY · USER STARTED</span></div>
-	<p class="description">Search both CDP histories from their verified deployment blocks. The scan queries Ethereum logs in your browser and stores addresses and checkpoints only in this browser. RPC providers may throttle long searches.</p>
+	<p class="description">Search both CDP histories from their verified deployment blocks. The scan queries Ethereum logs in your browser and stores addresses and checkpoints only in this browser. {usesEtherscan ? 'This build uses Etherscan for historical logs; its API key is public and its quota is shared by site visitors.' : 'Without an Etherscan key, the configured RPC must allow archive log access; some public RPCs deny these requests or throttle long searches.'}</p>
+	{#if usesEtherscan}<p class="attribution"><a href="https://etherscan.io/apis" target="_blank" rel="noreferrer">Powered by Etherscan.io APIs ↗</a></p>{/if}
 	<div class="controls">
 		<fieldset><legend>CDP versions</legend><label><input type="checkbox" value="v1" bind:group={versions} disabled={isRunning || isRanking}/> v1</label><label><input type="checkbox" value="v1.1" bind:group={versions} disabled={isRunning || isRanking}/> v1.1</label></fieldset>
 		<div class="buttons">{#if stopping}<span class="ranking-label">Stopping…</span><button class="button secondary" type="button" disabled>Stopping</button>{:else if isRanking}<span class="ranking-label">Ranking…</span><button class="button secondary" type="button" onclick={cancel}>Stop</button>{:else if isRunning}<button class="button secondary" type="button" onclick={togglePause}>{scanner.status === 'paused' ? 'Resume' : 'Pause'}</button><button class="button secondary" type="button" onclick={cancel}>Stop</button>{:else}<button class="button" type="button" onclick={startScan}>Scan / resume</button><button class="button secondary" type="button" onclick={clearHistory} disabled={!versions.length}>Clear saved history</button>{/if}</div>
@@ -133,6 +135,8 @@
 	.header h2 { margin:4px 0 0; font-size:1.05rem; letter-spacing:-.04em; }
 	.privacy { color:var(--dim); font-size:.58rem; letter-spacing:.07em; }
 	.description,.disclaimer,.empty { margin:-7px 0 0; color:var(--muted); font-size:.71rem; line-height:1.55; }
+	.attribution { margin:-9px 0 0; font-size:.63rem; }
+	.attribution a { color:var(--mint); text-decoration:none; }
 	.controls { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; }
 	fieldset { display:flex; gap:15px; margin:0; border:1px solid var(--border); border-radius:5px; padding:7px 10px 9px; }
 	legend { padding-inline:4px; color:var(--dim); font-size:.6rem; }

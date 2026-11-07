@@ -4,6 +4,7 @@ import type { ScanWorkerMessage, ScanWorkerRequest } from './types.js';
 import {
 	MAX_SCAN_DURATION_PER_RESUME_MS,
 	MAX_SCAN_REQUESTS_PER_RESUME,
+	MAX_CACHED_ADDRESSES,
 	readRpcResponseJson,
 	scanBudgetExceeded
 } from './scan-bounds.mjs';
@@ -20,13 +21,50 @@ const EVENT_TOPICS = [
 
 type RpcLog = { topics?: string[] };
 type RpcResponse = { result?: RpcLog[]; error?: { message?: string; code?: number } };
+type EtherscanResponse = { status?: string; message?: string; result?: RpcLog[] | string };
+type ScanRangeResult = { addresses: Address[]; logsProcessed: number };
+const TRACKED_EVENT_TOPICS = new Set<string>(EVENT_TOPICS.map((topic) => topic.toLowerCase()));
 const scope = self as DedicatedWorkerGlobalScope;
 let paused = false;
 let cancelled = false;
 let resumeWaiter: (() => void) | undefined;
 let activeFetchController: AbortController | undefined;
+let lastEtherscanRequestAt: number | undefined;
+
+class RpcHttpError extends Error {
+	constructor(readonly status: number, message: string) {
+		super(message);
+		this.name = 'RpcHttpError';
+	}
+}
+
+class ScanRangeAddressLimitError extends Error {
+	constructor() {
+		super(`One block range returned more than ${MAX_CACHED_ADDRESSES.toLocaleString()} unique depositor addresses.`);
+		this.name = 'ScanRangeAddressLimitError';
+	}
+}
 
 function emit(message: ScanWorkerMessage): void { scope.postMessage(message); }
+
+function addDepositors(logs: RpcLog[], addresses: Set<Address>): void {
+	for (const log of logs) {
+		const signature = log.topics?.[0]?.toLowerCase();
+		if (!signature || !TRACKED_EVENT_TOPICS.has(signature)) continue;
+		const topic = log.topics?.[1];
+		if (!topic || !/^0x[0-9a-fA-F]{64}$/.test(topic)) continue;
+		const address = `0x${topic.slice(-40).toLowerCase()}` as Address;
+		if (addresses.has(address)) continue;
+		if (addresses.size >= MAX_CACHED_ADDRESSES) throw new ScanRangeAddressLimitError();
+		addresses.add(address);
+	}
+}
+
+function scanRpcLogs(logs: RpcLog[]): ScanRangeResult {
+	const addresses = new Set<Address>();
+	addDepositors(logs, addresses);
+	return { addresses: [...addresses], logsProcessed: logs.length };
+}
 
 async function waitWhilePaused(): Promise<boolean> {
 	if (!paused || cancelled) return false;
@@ -38,7 +76,7 @@ function notifyPause(version: 'v1' | 'v1.1', from: bigint, through: bigint, next
 	emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'paused', message });
 }
 
-async function getLogs(rpcUrl: string, address: Address, fromBlock: bigint, toBlock: bigint): Promise<RpcLog[]> {
+async function getRpcLogs(rpcUrl: string, address: Address, fromBlock: bigint, toBlock: bigint): Promise<RpcLog[]> {
 	const controller = new AbortController();
 	activeFetchController = controller;
 	const timeout = setTimeout(() => controller.abort(), 25_000);
@@ -51,7 +89,16 @@ async function getLogs(rpcUrl: string, address: Address, fromBlock: bigint, toBl
 				params: [{ address, fromBlock: `0x${fromBlock.toString(16)}`, toBlock: `0x${toBlock.toString(16)}`, topics: [EVENT_TOPICS] }]
 			})
 		});
-		if (!response.ok) throw new Error(`RPC returned HTTP ${response.status}.`);
+		if (!response.ok) {
+			let detail = '';
+			try {
+				const body = await readRpcResponseJson(response, controller.signal) as RpcResponse;
+				if (typeof body.error?.message === 'string') detail = `: ${body.error.message}`;
+			} catch {
+				// Keep the HTTP status when an intermediary returns a non-JSON error page.
+			}
+			throw new RpcHttpError(response.status, `RPC returned HTTP ${response.status}${detail || '.'}`);
+		}
 		const body = await readRpcResponseJson(response, controller.signal) as RpcResponse;
 		if (body.error) throw new Error(body.error.message || `RPC error ${body.error.code ?? 'unknown'}.`);
 		if (!Array.isArray(body.result)) throw new Error('RPC returned an invalid eth_getLogs response.');
@@ -65,6 +112,74 @@ async function getLogs(rpcUrl: string, address: Address, fromBlock: bigint, toBl
 	}
 }
 
+function etherscanMessage(body: EtherscanResponse): string {
+	return [body.message, typeof body.result === 'string' ? body.result : undefined]
+		.filter((message): message is string => Boolean(message?.trim()))
+		.map((message) => message.trim())
+		.filter((message, index, messages) => messages.indexOf(message) === index)
+		.join(': ');
+}
+
+async function waitForEtherscanSlot(prepareRequest: () => Promise<void>): Promise<void> {
+	const remaining = lastEtherscanRequestAt === undefined ? 0 : Math.ceil(400 - (performance.now() - lastEtherscanRequestAt));
+	if (remaining > 0) await new Promise<void>((resolve) => setTimeout(resolve, remaining));
+	if (cancelled) throw new Error('Scan cancelled.');
+	await prepareRequest();
+	if (cancelled) throw new Error('Scan cancelled.');
+	lastEtherscanRequestAt = performance.now();
+}
+
+async function getEtherscanLogs(
+	apiKey: string,
+	address: Address,
+	fromBlock: bigint,
+	toBlock: bigint,
+	prepareRequest: () => Promise<void>
+): Promise<ScanRangeResult> {
+	const addresses = new Set<Address>();
+	let logsProcessed = 0;
+	for (let page = 1; ; page += 1) {
+		await waitForEtherscanSlot(prepareRequest);
+		const controller = new AbortController();
+		activeFetchController = controller;
+		const timeout = setTimeout(() => controller.abort(), 25_000);
+		try {
+			const query = new URLSearchParams({
+				chainid: '1', module: 'logs', action: 'getLogs',
+				fromBlock: fromBlock.toString(), toBlock: toBlock.toString(),
+				address, page: page.toString(), offset: '1000', apikey: apiKey
+			});
+			const response = await fetch(`https://api.etherscan.io/v2/api?${query.toString()}`, { signal: controller.signal });
+			if (!response.ok) {
+				let detail = '';
+				try {
+					const body = await readRpcResponseJson(response, controller.signal, undefined, 'Etherscan') as EtherscanResponse;
+					detail = etherscanMessage(body);
+				} catch {
+					// Keep the HTTP status when an intermediary returns a non-JSON error page.
+				}
+				throw new Error(`Etherscan returned HTTP ${response.status}${detail ? `: ${detail}` : '.'}`);
+			}
+			const body = await readRpcResponseJson(response, controller.signal, undefined, 'Etherscan') as EtherscanResponse;
+			const message = etherscanMessage(body);
+			if (body.status === '1' && Array.isArray(body.result)) {
+				logsProcessed += body.result.length;
+				addDepositors(body.result, addresses);
+				if (body.result.length === 1_000) continue;
+				return { addresses: [...addresses], logsProcessed };
+			}
+			if (body.status === '0' && /no records found/i.test(message)) return { addresses: [...addresses], logsProcessed };
+			throw new Error(`Etherscan API error: ${message || 'Invalid logs response.'}`);
+		} catch (error) {
+			controller.abort();
+			throw error;
+		} finally {
+			clearTimeout(timeout);
+			if (activeFetchController === controller) activeFetchController = undefined;
+		}
+	}
+}
+
 async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promise<void> {
 	const version = start.version;
 	const from = BigInt(start.fromBlock);
@@ -74,6 +189,7 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 	let logsProcessed = 0;
 	let requestsThisResume = 0;
 	let resumeStartedAt = performance.now();
+	lastEtherscanRequestAt = undefined;
 	if (next > through) {
 		emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'complete' });
 		return;
@@ -90,7 +206,7 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 		if (scanBudgetExceeded(requestsThisResume, resumeStartedAt)) {
 			paused = true;
 			const minutes = MAX_SCAN_DURATION_PER_RESUME_MS / 60_000;
-			notifyPause(version, from, through, next, logsProcessed, `Scan paused after ${MAX_SCAN_REQUESTS_PER_RESUME} RPC ranges or ${minutes} minutes to protect this browser. Resume to continue.`);
+			notifyPause(version, from, through, next, logsProcessed, `Scan paused after ${MAX_SCAN_REQUESTS_PER_RESUME} provider requests or ${minutes} minutes to protect this browser. Resume to continue.`);
 			const resumed = await waitWhilePaused();
 			if (cancelled) {
 				emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'cancelled', message: 'Scan stopped. Resume later from the saved checkpoint.' });
@@ -103,34 +219,51 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 			continue;
 		}
 		const end = next + BigInt(range - 1) > through ? through : next + BigInt(range - 1);
-		let logs: RpcLog[];
+		let result: ScanRangeResult;
 		try {
-			requestsThisResume += 1;
-			logs = await getLogs(start.rpcUrl, start.address, next, end);
+			if (start.etherscanApiKey) {
+				result = await getEtherscanLogs(start.etherscanApiKey, start.address, next, end, async () => {
+					if (paused) {
+						notifyPause(version, from, through, next, logsProcessed);
+						const resumed = await waitWhilePaused();
+						if (cancelled) throw new Error('Scan cancelled.');
+						if (resumed) { requestsThisResume = 0; resumeStartedAt = performance.now(); }
+					}
+					if (scanBudgetExceeded(requestsThisResume, resumeStartedAt)) {
+						paused = true;
+						const minutes = MAX_SCAN_DURATION_PER_RESUME_MS / 60_000;
+						notifyPause(version, from, through, next, logsProcessed, `Scan paused after ${MAX_SCAN_REQUESTS_PER_RESUME} provider requests or ${minutes} minutes to protect this browser. Resume to continue.`);
+						const resumed = await waitWhilePaused();
+						if (cancelled) throw new Error('Scan cancelled.');
+						if (resumed) { requestsThisResume = 0; resumeStartedAt = performance.now(); }
+					}
+					if (cancelled) throw new Error('Scan cancelled.');
+					requestsThisResume += 1;
+				});
+			} else {
+				requestsThisResume += 1;
+				result = scanRpcLogs(await getRpcLogs(start.rpcUrl, start.address, next, end));
+			}
 		} catch (error) {
 			if (cancelled) {
 				emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'cancelled', message: 'Scan stopped. Resume later from the saved checkpoint.' });
 				return;
 			}
-			if (range > 1) {
+			const shouldReduceRange = range > 1 && (error instanceof ScanRangeAddressLimitError || (!start.etherscanApiKey && !(error instanceof RpcHttpError && (error.status === 401 || error.status === 403))));
+			if (shouldReduceRange) {
 				range = Math.max(1, Math.floor(range / 2));
 				continue;
 			}
 			throw new Error(`Could not scan block ${next.toString()}: ${error instanceof Error ? error.message : 'RPC request failed.'}`);
 		}
-		const found = new Set<Address>();
-		for (const log of logs) {
-			const topic = log.topics?.[1];
-			if (topic && /^0x[0-9a-fA-F]{64}$/.test(topic)) found.add(`0x${topic.slice(-40)}` as Address);
-		}
-		logsProcessed += logs.length;
+		logsProcessed += result.logsProcessed;
 		next = end + 1n;
-		if (logs.length >= 8_000) range = Math.max(1, Math.floor(range / 2));
-		else if (logs.length < 300) range = Math.min(10_000, range * 2);
+		if (result.logsProcessed >= 8_000) range = Math.max(1, Math.floor(range / 2));
+		else if (result.logsProcessed < 300) range = Math.min(10_000, range * 2);
 		const status = cancelled ? 'cancelled' : next > through ? 'complete' : paused ? 'paused' : 'running';
 		emit({
 			type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(),
-			logsProcessed, addresses: [...found], status,
+			logsProcessed, addresses: result.addresses, status,
 			message: status === 'paused' ? 'Scan paused; the latest completed block range is saved in this browser.' : undefined
 		});
 		if (cancelled) return;
@@ -142,7 +275,7 @@ scope.addEventListener('message', (event: MessageEvent<ScanWorkerRequest>) => {
 	if (request.type === 'pause') { paused = true; return; }
 	if (request.type === 'resume') { paused = false; resumeWaiter?.(); resumeWaiter = undefined; return; }
 	if (request.type === 'cancel') { cancelled = true; paused = false; activeFetchController?.abort(); resumeWaiter?.(); resumeWaiter = undefined; return; }
-	paused = false; cancelled = false;
+	paused = false; cancelled = false; lastEtherscanRequestAt = undefined;
 	void run(request).catch((error: unknown) => {
 		emit({ type: 'error', version: request.version, message: error instanceof Error ? error.message : 'The browser scan failed.' });
 	});

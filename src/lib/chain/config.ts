@@ -5,6 +5,7 @@ export type CdpVersion = 'v1' | 'v1.1';
 export const CHAIN_ID = 1;
 export const CHAIN_NAME = 'Ethereum Mainnet';
 export const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL?.trim() || 'https://ethereum-rpc.publicnode.com';
+export const ETHERSCAN_API_KEY = import.meta.env.VITE_ETHERSCAN_API_KEY?.trim() || undefined;
 
 export const ADDRESSES: Record<'v1Cdp' | 'v11Cdp' | 'boxEth' | 'stEth' | 'boxFee' | 'feeStaking' | 'psm' | 'treasury', Address> = {
 	v1Cdp: '0x7f0A0C7149a46Bf943cCd412da687144b49C6014',
