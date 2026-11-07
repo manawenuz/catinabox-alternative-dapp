@@ -19,10 +19,13 @@ export VITE_ETHERSCAN_API_KEY
 # An empty BASE_PATH makes the generated links resolve from the IPFS CID root.
 BASE_PATH= npm run build
 
-docker compose -f "$COMPOSE_FILE" up -d --force-recreate --wait
+# Keep the Kubo peer running so provider addresses and relay reservations stay valid.
+docker compose -f "$COMPOSE_FILE" up -d --wait
 
 LOCAL_CID="$(docker compose -f "$COMPOSE_FILE" exec -T kubo ipfs add -Q -r --cid-version=1 /export)"
 docker compose -f "$COMPOSE_FILE" exec -T kubo ipfs pin add --recursive "$LOCAL_CID" >/dev/null
+# Refresh the provider record immediately instead of waiting for periodic reprovide.
+docker compose -f "$COMPOSE_FILE" exec -T kubo ipfs provide once "$LOCAL_CID" >/dev/null
 PINATA_CID="$(PINATA_JWT="$PINATA_JWT" node "$PROJECT_ROOT/scripts/pinata-upload.mjs" "$PROJECT_ROOT/build")"
 
 printf '\nPublished the static site to Pinata and pinned a local Kubo copy.\n'

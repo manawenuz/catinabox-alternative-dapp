@@ -23,16 +23,31 @@ export type RedemptionScanner = {
 	get status(): 'idle' | 'running' | 'paused' | 'cancelled';
 };
 
+type ScanLogLevel = 'info' | 'warn' | 'error';
+type ScanCheckpoint = { fromBlock: string; throughBlock: string; nextBlock: string };
+
+function logScanEvent(level: ScanLogLevel, event: string, details: Record<string, unknown>): void {
+	const entry = { scope: 'redemption-scan', event, ...details };
+	if (level === 'error') console.error('[redemption-scan]', entry);
+	else if (level === 'warn') console.warn('[redemption-scan]', entry);
+	else console.info('[redemption-scan]', entry);
+}
+
 export function createRedemptionScanner(): RedemptionScanner {
 	let activeWorker: Worker | undefined;
 	let stopped = false;
 	let currentStatus: 'idle' | 'running' | 'paused' | 'cancelled' = 'idle';
+	let activeVersion: CdpVersion | undefined;
+	let activeCheckpoint: ScanCheckpoint | undefined;
 
 	async function runVersion(version: CdpVersion, throughBlock: bigint, onProgress: ProgressCallback): Promise<void> {
 		const cached = await readScan(version);
 		if (stopped) return;
 		let fromBlock = BigInt(cached.nextBlock);
 		if (fromBlock < DEPLOYMENT_BLOCKS[version] || fromBlock > throughBlock + 1n) fromBlock = DEPLOYMENT_BLOCKS[version];
+		activeVersion = version;
+		activeCheckpoint = { fromBlock: fromBlock.toString(), throughBlock: throughBlock.toString(), nextBlock: fromBlock.toString() };
+		logScanEvent('info', 'version-started', { version, ...activeCheckpoint, cachedAddresses: cached.addresses.length });
 		await new Promise<void>((resolve, reject) => {
 			if (stopped) { resolve(); return; }
 			const worker = new Worker(new URL('./scan.worker.ts', import.meta.url), { type: 'module' });
@@ -59,10 +74,18 @@ export function createRedemptionScanner(): RedemptionScanner {
 					if (finished) return;
 					const record = await saveScanProgress(version, message.addresses, BigInt(message.nextBlock), BigInt(message.throughBlock));
 					currentStatus = message.status === 'paused' ? 'paused' : message.status === 'cancelled' ? 'cancelled' : 'running';
+					activeCheckpoint = { fromBlock: message.fromBlock, throughBlock: message.throughBlock, nextBlock: message.nextBlock };
+					if (message.status === 'paused') {
+						logScanEvent('warn', 'paused', { version, reason: message.pauseReason ?? 'unknown', ...activeCheckpoint, message: message.message });
+					} else if (message.status === 'complete') {
+						logScanEvent('info', 'version-completed', { version, ...activeCheckpoint, logsProcessed: message.logsProcessed, cachedAddressCount: record.addresses.length });
+					} else if (message.status === 'cancelled') {
+						logScanEvent('info', 'cancelled', { version, ...activeCheckpoint, logsProcessed: message.logsProcessed });
+					}
 					onProgress({
 						version, fromBlock: BigInt(message.fromBlock), throughBlock: BigInt(message.throughBlock),
 						nextBlock: BigInt(message.nextBlock), logsProcessed: message.logsProcessed,
-						candidateCount: record.addresses.length, status: message.status, message: message.message
+						candidateCount: record.addresses.length, status: message.status, message: message.message, pauseReason: message.pauseReason
 					});
 					if (message.status === 'complete' || message.status === 'cancelled') finish();
 				}).catch((error: unknown) => finish(error instanceof Error ? error : new Error('Unable to persist the scan checkpoint.')));
@@ -127,20 +150,48 @@ export function createRedemptionScanner(): RedemptionScanner {
 			if (!versions.length) throw new Error('Select at least one CDP version to scan.');
 			if (activeWorker) throw new Error('A redemption history scan is already running.');
 			stopped = false; currentStatus = 'running';
-			const throughBlock = await publicClient.getBlockNumber();
-			for (const version of versions) {
-				if (stopped) break;
-				await runVersion(version, throughBlock, onProgress);
+			activeVersion = undefined; activeCheckpoint = undefined;
+			logScanEvent('info', 'scan-started', { versions: [...versions] });
+			try {
+				const throughBlock = await publicClient.getBlockNumber();
+				for (const version of versions) {
+					if (stopped) break;
+					await runVersion(version, throughBlock, onProgress);
+				}
+				if (stopped) {
+					logScanEvent('info', 'scan-cancelled', { version: activeVersion, ...activeCheckpoint });
+					return { candidates: [], addressesChecked: 0, failedReads: 0 };
+				}
+				const snapshotBlock = await publicClient.getBlockNumber();
+				const result = await loadActiveCandidates(versions, snapshotBlock);
+				currentStatus = stopped ? 'cancelled' : 'idle';
+				if (stopped) logScanEvent('info', 'scan-cancelled', { versions: [...versions], snapshotBlock: snapshotBlock.toString(), addressesChecked: result.addressesChecked, failedReads: result.failedReads });
+				else logScanEvent('info', 'scan-completed', { versions: [...versions], snapshotBlock: snapshotBlock.toString(), candidateCount: result.candidates.length, addressesChecked: result.addressesChecked, failedReads: result.failedReads });
+				return result;
+			} catch (error) {
+				currentStatus = stopped ? 'cancelled' : 'idle';
+				if (!stopped) logScanEvent('error', 'scan-failed', { version: activeVersion ?? versions[0], ...activeCheckpoint, message: error instanceof Error ? error.message : 'The browser scan failed.' });
+				throw error;
 			}
-			if (stopped) return { candidates: [], addressesChecked: 0, failedReads: 0 };
-			const snapshotBlock = await publicClient.getBlockNumber();
-			const result = await loadActiveCandidates(versions, snapshotBlock);
-			currentStatus = stopped ? 'cancelled' : 'idle';
-			return result;
 		},
-		pause() { if (activeWorker) { currentStatus = 'paused'; activeWorker.postMessage({ type: 'pause' }); } },
-		resume() { if (activeWorker) { currentStatus = 'running'; activeWorker.postMessage({ type: 'resume' }); } },
-		cancel() { stopped = true; currentStatus = 'cancelled'; activeWorker?.postMessage({ type: 'cancel' }); },
+		pause() {
+			if (activeWorker) {
+				currentStatus = 'paused';
+				logScanEvent('warn', 'pause-requested', { version: activeVersion, reason: 'user', ...activeCheckpoint });
+				activeWorker.postMessage({ type: 'pause' });
+			}
+		},
+		resume() {
+			if (activeWorker) {
+				currentStatus = 'running';
+				logScanEvent('info', 'resume-requested', { version: activeVersion, ...activeCheckpoint });
+				activeWorker.postMessage({ type: 'resume' });
+			}
+		},
+		cancel() {
+			if (currentStatus !== 'idle' && currentStatus !== 'cancelled') logScanEvent('info', 'cancel-requested', { version: activeVersion, ...activeCheckpoint });
+			stopped = true; currentStatus = 'cancelled'; activeWorker?.postMessage({ type: 'cancel' });
+		},
 		get status() { return currentStatus; }
 	};
 }

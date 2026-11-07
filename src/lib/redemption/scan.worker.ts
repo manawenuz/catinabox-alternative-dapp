@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import type { Address } from 'viem';
-import type { ScanWorkerMessage, ScanWorkerRequest } from './types.js';
+import type { ScanPauseReason, ScanWorkerMessage, ScanWorkerRequest } from './types.js';
 import {
 	MAX_SCAN_DURATION_PER_RESUME_MS,
 	MAX_SCAN_REQUESTS_PER_RESUME,
@@ -27,6 +27,7 @@ const TRACKED_EVENT_TOPICS = new Set<string>(EVENT_TOPICS.map((topic) => topic.t
 const scope = self as DedicatedWorkerGlobalScope;
 let paused = false;
 let cancelled = false;
+let pauseReason: ScanPauseReason | undefined;
 let resumeWaiter: (() => void) | undefined;
 let activeFetchController: AbortController | undefined;
 let lastEtherscanRequestAt: number | undefined;
@@ -72,8 +73,30 @@ async function waitWhilePaused(): Promise<boolean> {
 	return !cancelled;
 }
 
-function notifyPause(version: 'v1' | 'v1.1', from: bigint, through: bigint, next: bigint, logsProcessed: number, message = 'Scan paused; the latest completed block range is saved in this browser.'): void {
-	emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'paused', message });
+function notifyPause(version: 'v1' | 'v1.1', from: bigint, through: bigint, next: bigint, logsProcessed: number, reason: ScanPauseReason, message: string): void {
+	emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'paused', message, pauseReason: reason });
+}
+
+function budgetPauseReason(requests: number, startedAt: number): ScanPauseReason {
+	const requestLimitReached = requests >= MAX_SCAN_REQUESTS_PER_RESUME;
+	const timeLimitReached = performance.now() - startedAt >= MAX_SCAN_DURATION_PER_RESUME_MS;
+	return requestLimitReached && timeLimitReached
+		? 'provider-request-and-time-limit'
+		: requestLimitReached ? 'provider-request-limit' : 'time-limit';
+}
+
+function automaticPauseMessage(reason: ScanPauseReason): string {
+	const requests = `${MAX_SCAN_REQUESTS_PER_RESUME} provider requests`;
+	const minutes = `${MAX_SCAN_DURATION_PER_RESUME_MS / 60_000} minutes`;
+	const reached = reason === 'provider-request-and-time-limit'
+		? `the ${requests} and ${minutes} limits`
+		: reason === 'provider-request-limit' ? `the ${requests} limit` : `the ${minutes} time limit`;
+	return `Scan paused after reaching ${reached} to protect this browser. Resume to continue from the saved checkpoint.`;
+}
+
+function notifyAutomaticPause(version: 'v1' | 'v1.1', from: bigint, through: bigint, next: bigint, logsProcessed: number, requests: number, startedAt: number): void {
+	pauseReason = budgetPauseReason(requests, startedAt);
+	notifyPause(version, from, through, next, logsProcessed, pauseReason, automaticPauseMessage(pauseReason));
 }
 
 async function getRpcLogs(rpcUrl: string, address: Address, fromBlock: bigint, toBlock: bigint): Promise<RpcLog[]> {
@@ -195,9 +218,13 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 		return;
 	}
 	while (next <= through) {
+		if (paused && pauseReason === 'user' && requestsThisResume === 0) {
+			notifyPause(version, from, through, next, logsProcessed, 'user', 'Scan paused by you. Resume to continue from the saved checkpoint.');
+		}
 		if (await waitWhilePaused()) {
 			requestsThisResume = 0;
 			resumeStartedAt = performance.now();
+			pauseReason = undefined;
 		}
 		if (cancelled) {
 			emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'cancelled', message: 'Scan stopped. Resume later from the saved checkpoint.' });
@@ -205,8 +232,7 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 		}
 		if (scanBudgetExceeded(requestsThisResume, resumeStartedAt)) {
 			paused = true;
-			const minutes = MAX_SCAN_DURATION_PER_RESUME_MS / 60_000;
-			notifyPause(version, from, through, next, logsProcessed, `Scan paused after ${MAX_SCAN_REQUESTS_PER_RESUME} provider requests or ${minutes} minutes to protect this browser. Resume to continue.`);
+			notifyAutomaticPause(version, from, through, next, logsProcessed, requestsThisResume, resumeStartedAt);
 			const resumed = await waitWhilePaused();
 			if (cancelled) {
 				emit({ type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(), logsProcessed, addresses: [], status: 'cancelled', message: 'Scan stopped. Resume later from the saved checkpoint.' });
@@ -215,6 +241,7 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 			if (resumed) {
 				requestsThisResume = 0;
 				resumeStartedAt = performance.now();
+				pauseReason = undefined;
 			}
 			continue;
 		}
@@ -224,18 +251,17 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 			if (start.etherscanApiKey) {
 				result = await getEtherscanLogs(start.etherscanApiKey, start.address, next, end, async () => {
 					if (paused) {
-						notifyPause(version, from, through, next, logsProcessed);
+						if (pauseReason === 'user') notifyPause(version, from, through, next, logsProcessed, 'user', 'Scan paused by you. Resume to continue from the saved checkpoint.');
 						const resumed = await waitWhilePaused();
 						if (cancelled) throw new Error('Scan cancelled.');
-						if (resumed) { requestsThisResume = 0; resumeStartedAt = performance.now(); }
+						if (resumed) { requestsThisResume = 0; resumeStartedAt = performance.now(); pauseReason = undefined; }
 					}
 					if (scanBudgetExceeded(requestsThisResume, resumeStartedAt)) {
 						paused = true;
-						const minutes = MAX_SCAN_DURATION_PER_RESUME_MS / 60_000;
-						notifyPause(version, from, through, next, logsProcessed, `Scan paused after ${MAX_SCAN_REQUESTS_PER_RESUME} provider requests or ${minutes} minutes to protect this browser. Resume to continue.`);
+						notifyAutomaticPause(version, from, through, next, logsProcessed, requestsThisResume, resumeStartedAt);
 						const resumed = await waitWhilePaused();
 						if (cancelled) throw new Error('Scan cancelled.');
-						if (resumed) { requestsThisResume = 0; resumeStartedAt = performance.now(); }
+						if (resumed) { requestsThisResume = 0; resumeStartedAt = performance.now(); pauseReason = undefined; }
 					}
 					if (cancelled) throw new Error('Scan cancelled.');
 					requestsThisResume += 1;
@@ -261,10 +287,14 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 		if (result.logsProcessed >= 8_000) range = Math.max(1, Math.floor(range / 2));
 		else if (result.logsProcessed < 300) range = Math.min(10_000, range * 2);
 		const status = cancelled ? 'cancelled' : next > through ? 'complete' : paused ? 'paused' : 'running';
+		const message = status === 'paused'
+			? pauseReason === 'user'
+				? 'Scan paused by you after the current block range. Resume to continue from the saved checkpoint.'
+				: 'Scan paused; the latest completed block range is saved in this browser.'
+			: undefined;
 		emit({
 			type: 'progress', version, fromBlock: from.toString(), throughBlock: through.toString(), nextBlock: next.toString(),
-			logsProcessed, addresses: result.addresses, status,
-			message: status === 'paused' ? 'Scan paused; the latest completed block range is saved in this browser.' : undefined
+			logsProcessed, addresses: result.addresses, status, message, pauseReason: status === 'paused' ? pauseReason : undefined
 		});
 		if (cancelled) return;
 	}
@@ -272,10 +302,10 @@ async function run(start: Extract<ScanWorkerRequest, { type: 'start' }>): Promis
 
 scope.addEventListener('message', (event: MessageEvent<ScanWorkerRequest>) => {
 	const request = event.data;
-	if (request.type === 'pause') { paused = true; return; }
-	if (request.type === 'resume') { paused = false; resumeWaiter?.(); resumeWaiter = undefined; return; }
-	if (request.type === 'cancel') { cancelled = true; paused = false; activeFetchController?.abort(); resumeWaiter?.(); resumeWaiter = undefined; return; }
-	paused = false; cancelled = false; lastEtherscanRequestAt = undefined;
+	if (request.type === 'pause') { if (!paused && !cancelled) { paused = true; pauseReason = 'user'; } return; }
+	if (request.type === 'resume') { paused = false; pauseReason = undefined; resumeWaiter?.(); resumeWaiter = undefined; return; }
+	if (request.type === 'cancel') { cancelled = true; paused = false; pauseReason = undefined; activeFetchController?.abort(); resumeWaiter?.(); resumeWaiter = undefined; return; }
+	paused = false; cancelled = false; pauseReason = undefined; lastEtherscanRequestAt = undefined;
 	void run(request).catch((error: unknown) => {
 		emit({ type: 'error', version: request.version, message: error instanceof Error ? error.message : 'The browser scan failed.' });
 	});

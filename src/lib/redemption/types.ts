@@ -2,6 +2,7 @@ import type { Address } from 'viem';
 import type { CdpVersion } from '#lib/chain/config.js';
 
 export type ScanStatus = 'running' | 'paused' | 'cancelled' | 'complete' | 'error';
+export type ScanPauseReason = 'user' | 'provider-request-limit' | 'time-limit' | 'provider-request-and-time-limit';
 
 export type ScanProgress = {
 	version: CdpVersion;
@@ -12,6 +13,7 @@ export type ScanProgress = {
 	candidateCount: number;
 	status: ScanStatus;
 	message?: string;
+	pauseReason?: ScanPauseReason;
 };
 
 export type Candidate = {
@@ -63,5 +65,5 @@ export type ScanWorkerRequest =
 	| { type: 'cancel' };
 
 export type ScanWorkerMessage =
-	| { type: 'progress'; version: CdpVersion; fromBlock: string; throughBlock: string; nextBlock: string; logsProcessed: number; addresses: Address[]; status: 'running' | 'paused' | 'cancelled' | 'complete'; message?: string }
+	| { type: 'progress'; version: CdpVersion; fromBlock: string; throughBlock: string; nextBlock: string; logsProcessed: number; addresses: Address[]; status: 'running' | 'paused' | 'cancelled' | 'complete'; message?: string; pauseReason?: ScanPauseReason }
 	| { type: 'error'; version: CdpVersion; message: string };
